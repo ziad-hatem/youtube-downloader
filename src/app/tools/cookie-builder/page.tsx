@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 
 function parseNetscapeCookiesToHeader(input: string): string {
   const lines = input.split(/\r?\n/);
@@ -47,6 +49,8 @@ function parseNetscapeCookiesToHeader(input: string): string {
 export default function CookieBuilderPage() {
   const [source, setSource] = useState("");
   const [copied, setCopied] = useState(false);
+  const [hasSaved, setHasSaved] = useState<boolean | null>(null);
+  const { data: session, status } = useSession();
 
   const output = useMemo(() => parseNetscapeCookiesToHeader(source), [source]);
 
@@ -57,6 +61,53 @@ export default function CookieBuilderPage() {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // ignore
+    }
+  };
+
+  useEffect(() => {
+    let ignore = false;
+    async function load() {
+      if (status !== "authenticated") return;
+      try {
+        const res = await fetch("/api/user-cookies", { cache: "no-store" });
+        const json = await res.json();
+        if (!ignore) setHasSaved(Boolean(json?.cookieHeader));
+      } catch {
+        if (!ignore) setHasSaved(null);
+      }
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [status]);
+
+  const onSave = async () => {
+    if (!output) return;
+    try {
+      const res = await fetch("/api/user-cookies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookieHeader: output }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to save");
+      setHasSaved(true);
+      toast.success("Cookie saved to your account");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const onClear = async () => {
+    try {
+      const res = await fetch("/api/user-cookies", { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to clear");
+      setHasSaved(false);
+      toast.success("Saved cookie removed");
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
@@ -103,6 +154,42 @@ export default function CookieBuilderPage() {
           <p className="text-xs text-foreground/60">
             Do not share this string publicly. Treat it like a password.
           </p>
+
+          <div className="mt-4 flex flex-col gap-2">
+            {status !== "authenticated" ? (
+              <p className="text-sm text-foreground/70">
+                Sign in to save your cookie to the account:{" "}
+                <a href="/signin" className="underline">
+                  /signin
+                </a>
+              </p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={!output}
+                  className="rounded bg-green-600 px-3 py-1.5 text-white text-sm disabled:opacity-60"
+                >
+                  Save to my account
+                </button>
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className="rounded border border-zinc-300 dark:border-zinc-800 px-3 py-1.5 text-sm"
+                >
+                  Remove saved cookie
+                </button>
+                <span className="text-xs text-foreground/60">
+                  {hasSaved == null
+                    ? ""
+                    : hasSaved
+                    ? "Saved cookie: yes"
+                    : "Saved cookie: no"}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </main>
