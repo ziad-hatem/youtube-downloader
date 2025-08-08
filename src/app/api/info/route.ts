@@ -115,8 +115,8 @@ export async function GET(request: Request) {
       author,
       duration,
       thumbnail,
-      progressive: progressive.map(({ height: _, ...rest }) => rest),
-      adaptive: adaptive.map(({ height: _, ...rest }) => rest),
+      progressive: progressive.map(({ height, ...rest }) => ({ ...rest })),
+      adaptive: adaptive.map(({ height, ...rest }) => ({ ...rest })),
       bestAudioItag: bestAudio?.itag ?? null,
       audio: { mp3: true },
     });
