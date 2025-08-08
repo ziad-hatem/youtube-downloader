@@ -50,7 +50,7 @@ export default function CookieBuilderPage() {
   const [source, setSource] = useState("");
   const [copied, setCopied] = useState(false);
   const [hasSaved, setHasSaved] = useState<boolean | null>(null);
-  const { data: session, status } = useSession();
+  const { status } = useSession();
 
   const output = useMemo(() => parseNetscapeCookiesToHeader(source), [source]);
 
