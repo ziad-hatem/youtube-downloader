@@ -12,13 +12,17 @@ export default function SignInPage() {
     e.preventDefault();
     try {
       setLoading(true);
-      await signIn("credentials", {
+      const result = await signIn("credentials", {
         email,
         password,
-        redirect: true,
-        callbackUrl:
-          typeof window !== "undefined" ? window.location.origin + "/" : "/",
+        redirect: false,
       });
+
+      if (result?.error) {
+        alert("Sign in failed: " + result.error);
+      } else if (result?.ok) {
+        window.location.href = "/";
+      }
     } finally {
       setLoading(false);
     }
