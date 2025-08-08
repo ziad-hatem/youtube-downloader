@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import ytdl, { videoFormat as YtdlVideoFormat } from "@distube/ytdl-core";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
+import { getDb } from "@/lib/mongodb";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { sanitizeFilename, isYouTubeUrl } from "@/lib/validators";
@@ -31,12 +34,24 @@ export async function GET(request: Request) {
   }
 
   try {
+    let effectiveCookie = process.env.YTDL_COOKIE;
+    try {
+      const session = await getServerSession(authOptions);
+      const userId = (session as { userId?: string } | null)?.userId;
+      if (userId) {
+        const db = await getDb();
+        const doc = await db.collection("cookies").findOne({ userId });
+        if (doc?.cookieHeader) effectiveCookie = doc.cookieHeader as string;
+      }
+    } catch {}
+
     const info = await ytdl.getInfo(url, {
       requestOptions: {
         headers: {
           "user-agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
           "accept-language": "en-US,en;q=0.9",
+          ...(effectiveCookie ? { cookie: effectiveCookie } : {}),
         } as Record<string, string>,
       },
     });
@@ -44,7 +59,7 @@ export async function GET(request: Request) {
 
     if (formatParam === "mp3") {
       // Audio-only to MP3 via ffmpeg
-      const cookie = process.env.YTDL_COOKIE;
+      const cookie = effectiveCookie;
       const audioStream = ytdl(url, {
         quality: "highestaudio",
         filter: "audioonly",
@@ -140,7 +155,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const cookie = process.env.YTDL_COOKIE;
+    const cookie = effectiveCookie;
     const videoStream = ytdl(url, {
       quality: itag,
       requestOptions: {
