@@ -44,6 +44,7 @@ export async function GET(request: Request) {
 
     if (formatParam === "mp3") {
       // Audio-only to MP3 via ffmpeg
+      const cookie = process.env.YTDL_COOKIE;
       const audioStream = ytdl(url, {
         quality: "highestaudio",
         filter: "audioonly",
@@ -52,6 +53,7 @@ export async function GET(request: Request) {
             "user-agent":
               "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
             "accept-language": "en-US,en;q=0.9",
+            ...(cookie ? { cookie } : {}),
           } as Record<string, string>,
         },
       });
@@ -138,6 +140,7 @@ export async function GET(request: Request) {
       );
     }
 
+    const cookie = process.env.YTDL_COOKIE;
     const videoStream = ytdl(url, {
       quality: itag,
       requestOptions: {
@@ -145,6 +148,7 @@ export async function GET(request: Request) {
           "user-agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
           "accept-language": "en-US,en;q=0.9",
+          ...(cookie ? { cookie } : {}),
         } as Record<string, string>,
       },
     });
