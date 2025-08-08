@@ -16,7 +16,8 @@ export default function SignInPage() {
         email,
         password,
         redirect: true,
-        callbackUrl: "/",
+        callbackUrl:
+          typeof window !== "undefined" ? window.location.origin + "/" : "/",
       });
     } finally {
       setLoading(false);
