@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
+import ytdl, { videoFormat as YtdlVideoFormat } from "@distube/ytdl-core";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { sanitizeFilename, isYouTubeUrl } from "@/lib/validators";
-import { Readable, PassThrough } from "stream";
+import { PassThrough, Readable as NodeReadable } from "stream";
 import contentDisposition from "content-disposition";
 
 export const runtime = "nodejs";
@@ -37,9 +37,9 @@ export async function GET(request: Request) {
           "user-agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
           "accept-language": "en-US,en;q=0.9",
-        },
+        } as Record<string, string>,
       },
-    } as any);
+    });
     const title = sanitizeFilename(info.videoDetails.title || "video");
 
     if (formatParam === "mp3") {
@@ -52,15 +52,14 @@ export async function GET(request: Request) {
             "user-agent":
               "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
             "accept-language": "en-US,en;q=0.9",
-          },
+          } as Record<string, string>,
         },
       });
       const pass = new PassThrough();
       ffmpeg(audioStream)
         .audioBitrate(128)
         .format("mp3")
-        .on("error", (err) => {
-          // eslint-disable-next-line no-console
+        .on("error", (err: unknown) => {
           console.error("ffmpeg error:", err);
         })
         .on("start", () => {
@@ -96,11 +95,11 @@ export async function GET(request: Request) {
         };
         const cleanup = () => {
           pass.off("data", onData);
-          pass.off("error", onError as any);
+          pass.off("error", onError as (err: Error) => void);
           pass.off("end", onEnd);
         };
         pass.on("data", onData);
-        pass.once("error", onError as any);
+        pass.once("error", onError as (err: Error) => void);
         pass.once("end", onEnd);
       });
 
@@ -126,8 +125,10 @@ export async function GET(request: Request) {
     if (!Number.isInteger(itag)) {
       return NextResponse.json({ error: "Invalid itag" }, { status: 400 });
     }
-    const targetFormat = Array.isArray(info.formats)
-      ? info.formats.find((f) => f.itag === itag)
+    const targetFormat: YtdlVideoFormat | undefined = Array.isArray(
+      info.formats
+    )
+      ? (info.formats as YtdlVideoFormat[]).find((f) => f.itag === itag)
       : undefined;
     const hasFormat = !!targetFormat;
     if (!hasFormat) {
@@ -144,9 +145,9 @@ export async function GET(request: Request) {
           "user-agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
           "accept-language": "en-US,en;q=0.9",
-        },
+        } as Record<string, string>,
       },
-    } as any);
+    });
     const headers = new Headers({
       "Content-Type": targetFormat?.mimeType?.split(";")?.[0] || "video/mp4",
       "Content-Disposition": contentDisposition(
@@ -174,38 +175,43 @@ export async function GET(request: Request) {
         reject(new Error("No data produced"));
       };
       const cleanup = () => {
-        (videoStream as any).off("data", onData);
-        (videoStream as any).off("error", onError as any);
-        (videoStream as any).off("end", onEnd);
+        (videoStream as NodeReadable).off("data", onData);
+        (videoStream as NodeReadable).off(
+          "error",
+          onError as (err: Error) => void
+        );
+        (videoStream as NodeReadable).off("end", onEnd);
       };
-      (videoStream as any).on("data", onData);
-      (videoStream as any).once("error", onError as any);
-      (videoStream as any).once("end", onEnd);
+      (videoStream as NodeReadable).on("data", onData);
+      (videoStream as NodeReadable).once(
+        "error",
+        onError as (err: Error) => void
+      );
+      (videoStream as NodeReadable).once("end", onEnd);
     });
 
     const webStream = new ReadableStream<Uint8Array>({
       start(controller) {
         while (firstChunkQueue.length)
           controller.enqueue(firstChunkQueue.shift()!);
-        (videoStream as any).on("data", (chunk: Buffer) =>
+        (videoStream as NodeReadable).on("data", (chunk: Buffer) =>
           controller.enqueue(new Uint8Array(chunk))
         );
-        (videoStream as any).once("end", () => controller.close());
-        (videoStream as any).once("error", (err: unknown) =>
+        (videoStream as NodeReadable).once("end", () => controller.close());
+        (videoStream as NodeReadable).once("error", (err: unknown) =>
           controller.error(err)
         );
       },
       cancel() {
         try {
-          (videoStream as any).destroy();
+          (videoStream as NodeReadable).destroy();
         } catch {}
       },
     });
     return new Response(webStream, { headers, status: 200 });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to start download" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to start download";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

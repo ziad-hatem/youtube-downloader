@@ -5,9 +5,8 @@ import { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import Image from "next/image";
 import { toast } from "sonner";
-import { Download, Search, Music, Video } from "lucide-react";
+import { Download, Search } from "lucide-react";
 
 const formSchema = z.object({
   url: z
@@ -72,8 +71,10 @@ export default function Home() {
         (json as VideoInfo).adaptive?.[0];
       setSelected(mp4 ? `itag:${mp4.itag}` : "mp3");
       toast.success("Video info loaded");
-    } catch (err: any) {
-      toast.error(err?.message || "Could not fetch video info");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Could not fetch video info";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

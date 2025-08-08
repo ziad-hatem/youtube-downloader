@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
+import ytdl, {
+  videoFormat as YtdlVideoFormat,
+  videoInfo as YtdlVideoInfo,
+} from "@distube/ytdl-core";
 import { isYouTubeUrl } from "@/lib/validators";
 
 export const runtime = "nodejs";
@@ -24,15 +27,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const info = await ytdl.getInfo(url, {
+    const info: YtdlVideoInfo = await ytdl.getInfo(url, {
       requestOptions: {
         headers: {
           "user-agent":
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
           "accept-language": "en-US,en;q=0.9",
-        },
+        } as Record<string, string>,
       },
-    } as any);
+    });
 
     const { videoDetails, formats } = info;
 
@@ -44,15 +47,15 @@ export async function GET(request: Request) {
       videoDetails.thumbnails?.[videoDetails.thumbnails.length - 1]?.url;
 
     const progressive = Array.isArray(formats)
-      ? formats
+      ? (formats as YtdlVideoFormat[])
           .filter(
-            (f: any) =>
+            (f) =>
               f.hasAudio &&
               f.hasVideo &&
               (f.container === "mp4" || f.container === "webm") &&
               (f.qualityLabel || f.height)
           )
-          .map((f: any) => ({
+          .map((f) => ({
             itag: f.itag as number,
             qualityLabel:
               (f.qualityLabel as string) || (f.height ? `${f.height}p` : ""),
@@ -69,16 +72,15 @@ export async function GET(request: Request) {
                 ? Number((f.qualityLabel as string).replace(/\D/g, ""))
                 : 0),
           }))
-          .sort((a: any, b: any) => (b.height || 0) - (a.height || 0))
+          .sort((a, b) => (a.height && b.height ? b.height - a.height : 0))
       : [];
 
     const adaptive = Array.isArray(formats)
-      ? formats
+      ? (formats as YtdlVideoFormat[])
           .filter(
-            (f: any) =>
-              f.hasVideo && !f.hasAudio && (f.qualityLabel || f.height)
+            (f) => f.hasVideo && !f.hasAudio && (f.qualityLabel || f.height)
           )
-          .map((f: any) => ({
+          .map((f) => ({
             itag: f.itag as number,
             qualityLabel:
               (f.qualityLabel as string) || (f.height ? `${f.height}p` : ""),
@@ -95,15 +97,14 @@ export async function GET(request: Request) {
                 ? Number((f.qualityLabel as string).replace(/\D/g, ""))
                 : 0),
           }))
-          .sort((a: any, b: any) => (b.height || 0) - (a.height || 0))
+          .sort((a, b) => (a.height && b.height ? b.height - a.height : 0))
       : [];
 
     const bestAudio = Array.isArray(formats)
-      ? formats
-          .filter((f: any) => f.hasAudio && !f.hasVideo)
+      ? (formats as YtdlVideoFormat[])
+          .filter((f) => f.hasAudio && !f.hasVideo)
           .sort(
-            (a: any, b: any) =>
-              (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
+            (a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0)
           )[0]
       : undefined;
 
@@ -117,10 +118,9 @@ export async function GET(request: Request) {
       bestAudioItag: bestAudio?.itag ?? null,
       audio: { mp3: true },
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to fetch video info" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch video info";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
